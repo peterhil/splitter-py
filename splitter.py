@@ -76,6 +76,30 @@ def pad(count, total):
     return str(count).rjust(int(math.ceil(math.log10(total))), '0')
 
 
+def split_file_by_bounds(infile, outdir, bounds):
+    bounds = fix_bounds_to_file_boundaries(bounds, infile)
+    try:
+        outdir = tempfile.mkdtemp(prefix='splitter-', dir=outdir)
+
+        with open(infile, 'rb') as f_in:
+            for fileno, (start, end) in enumerate(pairwise(bounds)):
+                count = end - start
+                prefix = pad(fileno, len(bounds) - 1)
+                outfile = ''.join((outdir, '/', prefix, '-', os.path.basename(infile)))
+
+                print('>>> Writing %i bytes (starting from %i) into file "%s" (%s of %s)' % \
+                      (count, start, outfile, fileno + 1, len(bounds) - 1))
+
+                f_in.seek(start)
+                chunk = f_in.read(count)
+                with open(outfile, 'wb') as f_out:
+                    f_out.write(chunk)
+        print('All parts written into:\n%s' % outdir)
+    except (IOError, OSError) as err:
+        sys.stderr.write("Splitter [ERROR] IO or OS error: %s\n" % err)
+        exit(1)
+
+
 if __name__ == '__main__':
     arguments = docopt(__doc__, version='Splitter ' + __version__)
     regexp = arguments['REGEXP']
@@ -85,26 +109,6 @@ if __name__ == '__main__':
     bounds = get_byte_boundaries(regexp, infile)
 
     if len(bounds) > 0:
-        bounds = fix_bounds_to_file_boundaries(bounds, infile)
-        try:
-            outdir = tempfile.mkdtemp(prefix='splitter-', dir=outdir)
-
-            with open(infile, 'rb') as f_in:
-                for fileno, (start, end) in enumerate(pairwise(bounds)):
-                    count = end - start
-                    prefix = pad(fileno, len(bounds) - 1)
-                    outfile = ''.join((outdir, '/', prefix, '-', os.path.basename(infile)))
-
-                    print('>>> Writing %i bytes (starting from %i) into file "%s" (%s of %s)' % \
-                          (count, start, outfile, fileno + 1, len(bounds) - 1))
-
-                    f_in.seek(start)
-                    chunk = f_in.read(count)
-                    with open(outfile, 'wb') as f_out:
-                        f_out.write(chunk)
-            print('All parts written into:\n%s' % outdir)
-        except (IOError, OSError) as err:
-            sys.stderr.write("Splitter [ERROR] IO or OS error: %s\n" % err)
-            exit(1)
+        split_file_by_bounds(infile, outdir, bounds)
     else:
         sys.stderr.write("No matches found!\n")
